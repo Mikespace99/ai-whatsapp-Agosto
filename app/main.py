@@ -1,4 +1,3 @@
-```python
 import os
 from datetime import datetime, timezone
 
@@ -629,4 +628,3 @@ def process_message(
             whatsapp_response
         )
     }
-```
