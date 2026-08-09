@@ -1,4 +1,11 @@
-from fastapi import FastAPI
+```python
+import os
+from datetime import datetime, timezone
+
+import requests
+
+from fastapi import FastAPI, Request
+from fastapi.responses import PlainTextResponse
 
 from app.workflows.n8n_client import send_context
 
@@ -36,9 +43,9 @@ app = FastAPI(
 )
 
 
-# --------------------------------------------------
+# ==================================================
 # HEALTH CHECK
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/health")
 def health():
@@ -47,11 +54,9 @@ def health():
     }
 
 
-import os
-
-from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse
-
+# ==================================================
+# WHATSAPP WEBHOOK VERIFICATION
+# ==================================================
 
 @app.get("/webhook/whatsapp")
 async def verify_whatsapp_webhook(request: Request):
@@ -73,85 +78,107 @@ async def verify_whatsapp_webhook(request: Request):
     )
 
 
-# --------------------------------------------------
-# TEST TENANTS
-# --------------------------------------------------
+# ==================================================
+# WHATSAPP MESSAGE WEBHOOK
+# ==================================================
 
-@app.get("/test/tenants")
-def test_tenants():
+@app.post("/webhook/whatsapp")
+async def whatsapp_webhook(request: Request):
 
-    from app.supabase_client import supabase
+    payload = await request.json()
 
-    response = (
-        supabase
-        .table("tenants")
-        .select("*")
-        .limit(10)
-        .execute()
-    )
+    message = extract_whatsapp_message(payload)
 
-    return {
-        "count": len(response.data),
-        "tenants": response.data
-    }
-
-
-# --------------------------------------------------
-# TEST TENANT
-# --------------------------------------------------
-
-@app.get("/test/tenant/{phone_number}")
-def test_tenant(phone_number: str):
-
-    whatsapp_account = get_whatsapp_account(
-        phone_number
-    )
-
-    if not whatsapp_account:
+    # Meta può inviare webhook che non sono messaggi
+    if not message:
         return {
-            "error": "WhatsApp account non trovato"
+            "status": "ignored"
         }
 
-    tenant_id = whatsapp_account["tenant_id"]
+    assistant_message = process_message(message)
 
-    tenant = get_tenant(
-        tenant_id
-    )
-
-    if not tenant:
-        return {
-            "error": "Tenant non trovato",
-            "tenant_id": tenant_id
-        }
+    # Invia risposta a WhatsApp
+    if assistant_message:
+        send_whatsapp_message(
+            to=message["from"],
+            message=assistant_message
+        )
 
     return {
-        "whatsapp_account": whatsapp_account,
-        "tenant": tenant
+        "status": "ok"
     }
 
 
-# --------------------------------------------------
-# TEST MESSAGE
-# --------------------------------------------------
+# ==================================================
+# ESTRAE IL MESSAGGIO DAL PAYLOAD META
+# ==================================================
 
-@app.post("/test/message")
-def test_message():
+def extract_whatsapp_message(payload):
+
+    try:
+
+        entry = payload["entry"][0]
+        change = entry["changes"][0]
+        value = change["value"]
+
+        messages = value.get("messages")
+
+        if not messages:
+            return None
+
+        whatsapp_message = messages[0]
+
+        # Per ora gestiamo solo messaggi testuali
+        if whatsapp_message.get("type") != "text":
+            return None
+
+        metadata = value.get("metadata", {})
+
+        business_phone = metadata.get(
+            "display_phone_number"
+        )
+
+        user_phone = whatsapp_message.get(
+            "from"
+        )
+
+        text = whatsapp_message["text"]["body"]
+
+        timestamp = whatsapp_message.get(
+            "timestamp"
+        )
+
+        if timestamp:
+            received_at = datetime.fromtimestamp(
+                int(timestamp),
+                tz=timezone.utc
+            ).isoformat()
+        else:
+            received_at = datetime.now(
+                timezone.utc
+            ).isoformat()
+
+        return {
+            "to": business_phone,
+            "from": user_phone,
+            "message": text,
+            "message_id": whatsapp_message.get("id"),
+            "received_at": received_at
+        }
+
+    except (KeyError, IndexError, TypeError):
+
+        return None
+
+
+# ==================================================
+# PIPELINE PRINCIPALE
+# ==================================================
+
+def process_message(message):
 
     # --------------------------------------------------
-    # 1. MESSAGGIO WHATSAPP SIMULATO
-    # --------------------------------------------------
-
-    message = {
-        "to": "+390000000000",
-        "from": "+393331234567",
-        "message": "Va bene anche sabato mattina?",
-        "message_id": "test-003",
-        "received_at": "2026-08-09T12:10:00+02:00"
-    }
-
-
-    # --------------------------------------------------
-    # 2. IDENTIFICA IL TENANT
+    # 1. IDENTIFICA ACCOUNT WHATSAPP
     # --------------------------------------------------
 
     whatsapp_account = get_whatsapp_account(
@@ -159,16 +186,17 @@ def test_message():
     )
 
     if not whatsapp_account:
-        return {
-            "error": "WhatsApp account non trovato",
-            "phone_number": message["to"]
-        }
+        print(
+            "WhatsApp account non trovato:",
+            message["to"]
+        )
+        return None
 
     tenant_id = whatsapp_account["tenant_id"]
 
 
     # --------------------------------------------------
-    # 3. RECUPERA IL TENANT
+    # 2. RECUPERA TENANT
     # --------------------------------------------------
 
     tenant = get_tenant(
@@ -176,14 +204,15 @@ def test_message():
     )
 
     if not tenant:
-        return {
-            "error": "Tenant non trovato",
-            "tenant_id": tenant_id
-        }
+        print(
+            "Tenant non trovato:",
+            tenant_id
+        )
+        return None
 
 
     # --------------------------------------------------
-    # 4. IDENTIFICA / CREA IL CUSTOMER
+    # 3. CUSTOMER
     # --------------------------------------------------
 
     customer = get_or_create_customer(
@@ -193,7 +222,7 @@ def test_message():
 
 
     # --------------------------------------------------
-    # 5. IDENTIFICA / CREA LA CONVERSAZIONE
+    # 4. CONVERSATION
     # --------------------------------------------------
 
     conversation = get_or_create_conversation(
@@ -203,7 +232,7 @@ def test_message():
 
 
     # --------------------------------------------------
-    # 6. IDENTIFICA / CREA IL CONVERSATION CONTEXT
+    # 5. CONVERSATION CONTEXT
     # --------------------------------------------------
 
     conversation_context = get_or_create_context(
@@ -213,10 +242,10 @@ def test_message():
 
 
     # --------------------------------------------------
-    # 7. SALVA IL MESSAGGIO UTENTE
+    # 6. SALVA MESSAGGIO USER
     # --------------------------------------------------
 
-    conversation_message = save_message(
+    save_message(
         conversation["conversation_id"],
         "user",
         message["message"]
@@ -224,7 +253,7 @@ def test_message():
 
 
     # --------------------------------------------------
-    # 8. RECUPERA LA HISTORY
+    # 7. HISTORY
     # --------------------------------------------------
 
     history = get_conversation_history(
@@ -233,7 +262,7 @@ def test_message():
 
 
     # --------------------------------------------------
-    # 9. RECUPERA LE TRANSITIONS
+    # 8. TRANSITIONS
     # --------------------------------------------------
 
     transitions = get_conversation_transitions(
@@ -242,7 +271,7 @@ def test_message():
 
 
     # --------------------------------------------------
-    # 10. RECUPERA I SERVIZI DEL TENANT
+    # 9. SERVIZI
     # --------------------------------------------------
 
     services = get_active_services(
@@ -251,7 +280,7 @@ def test_message():
 
 
     # --------------------------------------------------
-    # 11. COSTRUISCI IL CONTEXT INIZIALE
+    # 10. COSTRUISCI CONTEXT
     # --------------------------------------------------
 
     context = build_context(
@@ -268,7 +297,7 @@ def test_message():
 
 
     # --------------------------------------------------
-    # 12. AI - INTERPRETA IL MESSAGGIO
+    # 11. AI
     # --------------------------------------------------
 
     intent_result = parse_intent(
@@ -278,16 +307,11 @@ def test_message():
         context=context
     )
 
-
-    # --------------------------------------------------
-    # 13. AGGIUNGI RISULTATO AI AL CONTEXT
-    # --------------------------------------------------
-
     context["ai"] = intent_result
 
 
     # --------------------------------------------------
-    # 14. ROUTING WORKFLOW
+    # 12. ROUTING
     # --------------------------------------------------
 
     workflow = conversation["workflow"]
@@ -295,25 +319,31 @@ def test_message():
 
     current_workflow = conversation["workflow"]
 
-    if intent_result["intent"] == "BOOKING_REQUEST":
+    intent = intent_result["intent"]
+
+    if intent == "BOOKING_REQUEST":
         workflow = "BOOKING"
         step = "START"
 
-    elif intent_result["intent"] == "BOOKING_CHANGE":
+    elif intent == "BOOKING_CHANGE":
         workflow = "BOOKING"
 
-    elif intent_result["intent"] == "BOOKING_CANCEL":
+    elif intent == "BOOKING_CANCEL":
         workflow = "CANCELLATION"
         step = "START"
 
-    elif intent_result["intent"] == "INFORMATION_REQUEST":
+    elif intent == "INFORMATION_REQUEST":
         workflow = "INFO"
         step = "START"
 
 
     # --------------------------------------------------
-    # 15. AGGIORNA CONVERSATION STATE + TRANSITION
+    # 13. AGGIORNA STATE + TRANSITION
     # --------------------------------------------------
+
+    workflow_changed = (
+        workflow != current_workflow
+    )
 
     updated_conversation = update_conversation_state(
         conversation["conversation_id"],
@@ -322,12 +352,12 @@ def test_message():
         step=step,
         transition_type=(
             "WORKFLOW_START"
-            if workflow != current_workflow
+            if workflow_changed
             else None
         ),
         transition_reason=(
             f"Avvio workflow {workflow}"
-            if workflow != current_workflow
+            if workflow_changed
             else None
         )
     )
@@ -337,32 +367,55 @@ def test_message():
 
 
     # --------------------------------------------------
-    # 16. TROVA IL SERVIZIO
+    # 14. SERVIZIO DETERMINATO DALL'AI
     # --------------------------------------------------
 
-    service = find_service_by_name(
-        tenant_id,
-        "Pulizia viso"
+    service = None
+
+    entities = intent_result.get(
+        "entities",
+        {}
     )
 
+    service_name = entities.get(
+        "service_name"
+    )
+
+    if service_name:
+
+        service = find_service_by_name(
+            tenant_id,
+            service_name
+        )
+
 
     # --------------------------------------------------
-    # 17. AGGIORNA IL CONVERSATION CONTEXT
+    # 15. AGGIORNA CONVERSATION CONTEXT
     # --------------------------------------------------
 
     updated_conversation_context = update_conversation_context(
         conversation["conversation_id"],
-        service_id=service["id"] if service else None,
-        service_name=service["name"] if service else None,
-        last_intent=intent_result["intent"]
+        service_id=(
+            service["id"]
+            if service
+            else conversation_context.get("service_id")
+        ),
+        service_name=(
+            service["name"]
+            if service
+            else conversation_context.get("service_name")
+        ),
+        last_intent=intent
     )
 
     if updated_conversation_context:
-        conversation_context = updated_conversation_context
+        conversation_context = (
+            updated_conversation_context
+        )
 
 
     # --------------------------------------------------
-    # 18. RECUPERA LE TRANSITIONS AGGIORNATE
+    # 16. TRANSITIONS AGGIORNATE
     # --------------------------------------------------
 
     transitions = get_conversation_transitions(
@@ -371,7 +424,7 @@ def test_message():
 
 
     # --------------------------------------------------
-    # 19. RICOSTRUISCI IL CONTEXT UFFICIALE
+    # 17. CONTEXT UFFICIALE AGGIORNATO
     # --------------------------------------------------
 
     context = build_context(
@@ -386,27 +439,30 @@ def test_message():
         whatsapp_account=whatsapp_account
     )
 
-
-    # --------------------------------------------------
-    # 20. AGGIUNGI RISULTATO AI
-    # --------------------------------------------------
-
     context["ai"] = intent_result
 
 
     # --------------------------------------------------
-    # 21. INVIA IL CONTEXT A N8N
+    # 18. N8N
     # --------------------------------------------------
 
     n8n_response = send_context(
         context
     )
 
-    assistant_message = n8n_response.get(
-        "message"
+    assistant_message = (
+        n8n_response.get("message")
+        if n8n_response
+        else None
     )
 
+
+    # --------------------------------------------------
+    # 19. SALVA RISPOSTA ASSISTANT
+    # --------------------------------------------------
+
     if assistant_message:
+
         save_message(
             conversation["conversation_id"],
             "assistant",
@@ -415,22 +471,72 @@ def test_message():
 
 
     # --------------------------------------------------
-    # 22. RISULTATO DEL TEST
+    # 20. RETURN
     # --------------------------------------------------
 
-    return {
-        "message": message,
-        "whatsapp_account": whatsapp_account,
-        "tenant": tenant,
-        "customer": customer,
-        "conversation": conversation,
-        "conversation_context": conversation_context,
-        "conversation_message": conversation_message,
-        "history": history,
-        "transitions": transitions,
-        "context": context,
-        "intent_result": intent_result,
-        "services": services,
-        "service": service,
-        "n8n_response": n8n_response
+    return assistant_message
+
+
+# ==================================================
+# INVIO MESSAGGIO WHATSAPP
+# ==================================================
+
+def send_whatsapp_message(
+    to: str,
+    message: str
+):
+
+    phone_number_id = os.getenv(
+        "WHATSAPP_PHONE_NUMBER_ID"
+    )
+
+    access_token = os.getenv(
+        "WHATSAPP_ACCESS_TOKEN"
+    )
+
+    if not phone_number_id or not access_token:
+        print(
+            "WhatsApp credentials mancanti"
+        )
+        return None
+
+    url = (
+        f"https://graph.facebook.com/v23.0/"
+        f"{phone_number_id}/messages"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
     }
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "text",
+        "text": {
+            "body": message
+        }
+    }
+
+    response = requests.post(
+        url,
+        headers=headers,
+        json=payload,
+        timeout=20
+    )
+
+    print(
+        "=== WHATSAPP SEND ==="
+    )
+    print(
+        response.status_code
+    )
+    print(
+        response.text
+    )
+
+    response.raise_for_status()
+
+    return response.json()
+```
