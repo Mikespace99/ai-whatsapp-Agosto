@@ -47,6 +47,32 @@ def health():
     }
 
 
+import os
+
+from fastapi import FastAPI, Request
+from fastapi.responses import PlainTextResponse
+
+
+@app.get("/webhook/whatsapp")
+async def verify_whatsapp_webhook(request: Request):
+
+    params = request.query_params
+
+    mode = params.get("hub.mode")
+    verify_token = params.get("hub.verify_token")
+    challenge = params.get("hub.challenge")
+
+    expected_token = os.getenv("WHATSAPP_VERIFY_TOKEN")
+
+    if mode == "subscribe" and verify_token == expected_token:
+        return PlainTextResponse(challenge)
+
+    return PlainTextResponse(
+        "Verification failed",
+        status_code=403
+    )
+
+
 # --------------------------------------------------
 # TEST TENANTS
 # --------------------------------------------------
