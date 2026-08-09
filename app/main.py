@@ -1,4 +1,3 @@
-```python
 import os
 from datetime import datetime, timezone
 
@@ -539,4 +538,3 @@ def send_whatsapp_message(
     response.raise_for_status()
 
     return response.json()
-```
