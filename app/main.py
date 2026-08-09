@@ -1,4 +1,9 @@
 import os
+
+from app.integrations.whatsapp_client import (
+    send_whatsapp_message
+)
+
 from datetime import datetime, timezone
 
 import requests
@@ -94,18 +99,21 @@ async def whatsapp_webhook(request: Request):
             "status": "ignored"
         }
 
-    assistant_message = process_message(message)
+assistant_message = n8n_response.get("message")
 
-    # Invia risposta a WhatsApp
-    if assistant_message:
-        send_whatsapp_message(
-            to=message["from"],
-            message=assistant_message
-        )
+if assistant_message:
+    save_message(
+        conversation["conversation_id"],
+        "assistant",
+        assistant_message
+    )
 
-    return {
-        "status": "ok"
-    }
+    whatsapp_response = send_whatsapp_message(
+        to=message["from"],
+        message=assistant_message
+    )
+else:
+    whatsapp_response = None
 
 
 # ==================================================
@@ -474,6 +482,7 @@ def process_message(message):
     # --------------------------------------------------
 
     return assistant_message
+    
 
 
 # ==================================================
@@ -538,3 +547,4 @@ def send_whatsapp_message(
     response.raise_for_status()
 
     return response.json()
+    "whatsapp_response": whatsapp_response,
