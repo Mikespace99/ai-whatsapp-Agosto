@@ -585,34 +585,28 @@ def process_message(
         }
 
 
-    # --------------------------------------------------
-    # 19. PERSISTE CONTEXT AGGIORNATO
-    # --------------------------------------------------
+  # --------------------------------------------------
+# 19. PERSISTE CONTEXT AGGIORNATO
+# --------------------------------------------------
 
-    returned_conversation_context = (
+persisted_context = (
+    update_conversation_context(
+        conversation["conversation_id"],
         updated_context
-        .get("conversation", {})
-        .get("context", {})
+    )
+)
+
+if persisted_context:
+
+    conversation_context = (
+        persisted_context
     )
 
-    persisted_context = (
-        update_conversation_context(
-            conversation["conversation_id"],
-            returned_conversation_context
-        )
-    )
 
-    if persisted_context:
+# Il Context ufficiale ora è quello
+# restituito da N8N.
 
-        conversation_context = (
-            persisted_context
-        )
-
-
-    # Il Context ufficiale ora è quello
-    # restituito da N8N.
-
-    context = updated_context
+context = updated_context
 
 
     # --------------------------------------------------
