@@ -525,53 +525,40 @@ def process_message(
     )
 
 
-    # --------------------------------------------------
-    # 17. COSTRUISCI CONTEXT UFFICIALE
-    # --------------------------------------------------
+# --------------------------------------------------
+# 18. INVIA CONTEXT A N8N
+# --------------------------------------------------
 
-    context = build_context(
-        tenant=tenant,
-        customer=customer,
-        message=message,
-        conversation=conversation,
-        conversation_context=conversation_context,
-        history=history,
-        transitions=transitions,
-        services=services,
-        whatsapp_account=whatsapp_account
-    )
+n8n_response = send_context(
+    context
+)
 
-    context["ai"] = intent_result
+if not n8n_response:
 
-
-    # --------------------------------------------------
-    # 18. INVIA CONTEXT A N8N
-    # --------------------------------------------------
-
-   n8n_response = send_context(context)
-
-   if not n8n_response:
     return {
         "status": "error",
         "error": "N8N non ha restituito una risposta"
     }
 
-   updated_context = n8n_response.get("context")
+updated_context = n8n_response.get(
+    "context"
+)
 
-   response = n8n_response.get(
+response = n8n_response.get(
     "response",
     {}
-   )
+)
 
-   assistant_message = response.get(
+assistant_message = response.get(
     "message"
-   )
+)
 
-   should_send = response.get(
+should_send = response.get(
     "send",
     True
-   )
-    # --------------------------------------------------
+)
+ 
+# --------------------------------------------------
     # 19. SALVA + INVIA RISPOSTA ASSISTANT
     # --------------------------------------------------
 
