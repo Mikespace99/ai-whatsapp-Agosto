@@ -559,30 +559,28 @@ should_send = response.get(
 )
  
 # --------------------------------------------------
-    # 19. SALVA + INVIA RISPOSTA ASSISTANT
-    # --------------------------------------------------
+# 19. PERSISTE CONTEXT AGGIORNATO
+# --------------------------------------------------
 
-    whatsapp_response = None
+if updated_context:
 
-    if assistant_message:
+    returned_conversation_context = (
+        updated_context
+        .get("conversation", {})
+        .get("context", {})
+    )
 
-        # Salva risposta nel database
-
-        save_message(
+    persisted_context = (
+        update_conversation_context(
             conversation["conversation_id"],
-            "assistant",
-            assistant_message
+            returned_conversation_context
         )
+    )
 
-        # Invia risposta a WhatsApp
-
-        whatsapp_response = (
-            send_whatsapp_message(
-                to=message["from"],
-                message=assistant_message
-            )
-        )
-
+    if persisted_context:
+        conversation_context = (
+            persisted_context
+    )
 
     # --------------------------------------------------
     # 20. RISULTATO
