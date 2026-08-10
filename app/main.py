@@ -482,43 +482,11 @@ def process_message(
         )
 
 
-    # --------------------------------------------------
-    # 15. AGGIORNA CONVERSATION CONTEXT
-    # --------------------------------------------------
+# --------------------------------------------------
+# 15. AGGIORNA CONTEXT CON L'INTENTO AI
+# --------------------------------------------------
 
-    context_update = {
-
-        "service_id": (
-            service["id"]
-            if service
-            else conversation_context.get(
-                "service_id"
-            )
-        ),
-
-        "service_name": (
-            service["name"]
-            if service
-            else conversation_context.get(
-                "service_name"
-            )
-        ),
-
-        "last_intent": intent
-    }
-
-    updated_conversation_context = (
-        update_conversation_context(
-            conversation["conversation_id"],
-            context_update
-        )
-    )
-
-    if updated_conversation_context:
-
-        conversation_context = (
-            updated_conversation_context
-        )
+context["ai"] = intent_result
 
 
     # --------------------------------------------------
