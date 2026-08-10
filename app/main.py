@@ -553,7 +553,7 @@ context["ai"] = intent_result
         }
 
 
-  # --------------------------------------------------
+# --------------------------------------------------
 # 19. PERSISTE CONTEXT AGGIORNATO
 # --------------------------------------------------
 
@@ -577,92 +577,88 @@ if persisted_context:
 context = updated_context
 
 
-    # --------------------------------------------------
-    # 20. RISPOSTA N8N
-    # --------------------------------------------------
+# --------------------------------------------------
+# 20. RISPOSTA N8N
+# --------------------------------------------------
 
-    response = n8n_response.get(
-        "response",
-        {}
-    )
+response = n8n_response.get(
+    "response",
+    {}
+)
 
-    assistant_message = response.get(
-        "message"
-    )
+assistant_message = response.get(
+    "message"
+)
 
-   should_send = n8n_response.get(
+should_send = n8n_response.get(
     "send",
     True
+)
+
+
+# --------------------------------------------------
+# 21. SALVA + INVIA RISPOSTA ASSISTANT
+# --------------------------------------------------
+
+whatsapp_response = None
+
+if assistant_message and should_send:
+
+    save_message(
+        conversation["conversation_id"],
+        "assistant",
+        assistant_message
+    )
+
+    whatsapp_response = (
+        send_whatsapp_message(
+            to=message["from"],
+            message=assistant_message
+        )
     )
 
 
-    # --------------------------------------------------
-    # 21. SALVA + INVIA RISPOSTA ASSISTANT
-    # --------------------------------------------------
+# --------------------------------------------------
+# 22. RISULTATO
+# --------------------------------------------------
 
-    whatsapp_response = None
+return {
 
-    if assistant_message and should_send:
+    "status": "success",
 
-        # Salva risposta nel database
+    "message": message,
 
-        save_message(
-            conversation["conversation_id"],
-            "assistant",
-            assistant_message
-        )
+    "customer": customer,
 
-        # Invia risposta a WhatsApp
+    "conversation": conversation,
 
-        whatsapp_response = (
-            send_whatsapp_message(
-                to=message["from"],
-                message=assistant_message
-            )
-        )
+    "conversation_context": (
+        conversation_context
+    ),
 
+    "conversation_message": (
+        conversation_message
+    ),
 
-    # --------------------------------------------------
-    # 22. RISULTATO
-    # --------------------------------------------------
+    "history": history,
 
-    return {
+    "transitions": transitions,
 
-        "status": "success",
+    "context": context,
 
-        "message": message,
+    "intent_result": intent_result,
 
-        "customer": customer,
+    "services": services,
 
-        "conversation": conversation,
+    "service": service,
 
-        "conversation_context": (
-            conversation_context
-        ),
+    "n8n_response": n8n_response,
 
-        "conversation_message": (
-            conversation_message
-        ),
+    "assistant_message": (
+        assistant_message
+    ),
 
-        "history": history,
-
-        "transitions": transitions,
-
-        "context": context,
-
-        "intent_result": intent_result,
-
-        "services": services,
-
-        "service": service,
-
-        "n8n_response": n8n_response,
-
-        "assistant_message": (
-            assistant_message
-        ),
-
-        "whatsapp_response": (
-            whatsapp_response
-        )
-    }
+    "whatsapp_response": (
+        whatsapp_response
+    )
+}
