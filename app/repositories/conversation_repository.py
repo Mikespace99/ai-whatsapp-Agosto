@@ -159,19 +159,36 @@ def get_or_create_context(conversation_id: str, language: str):
 
 def update_conversation_context(
     conversation_id: str,
-    service_id: str = None,
-    service_name: str = None,
-    last_intent: str = None
+    context: dict
 ):
+    allowed_fields = {
+        "service_id",
+        "service_name",
+        "operator_id",
+        "requested_date",
+        "requested_time",
+        "selected_slot",
+        "booking_id",
+        "booking_preferences",
+        "language",
+        "customer_notes",
+        "last_intent",
+        "ai_summary"
+    }
+
+    data = {
+        key: value
+        for key, value in context.items()
+        if key in allowed_fields
+    }
+
+    if not data:
+        return None
 
     response = (
         supabase
         .table("conversation_context")
-        .update({
-            "service_id": service_id,
-            "service_name": service_name,
-            "last_intent": last_intent
-        })
+        .update(data)
         .eq("conversation_id", conversation_id)
         .execute()
     )
