@@ -123,18 +123,24 @@ def build_context(
             "settings": settings
         },
 
-        # ---------------------------------------------------------
-        # BOOKING
-        # ---------------------------------------------------------
-        "booking": {
-            "intent": None,
-            "service": None,
-            "preferences": {},
-            "candidate_slots": [],
-            "selected_slot": None,
-            "booking_result": None
-        },
-
+# ---------------------------------------------------------
+# BOOKING
+# ---------------------------------------------------------
+"booking": {
+    "intent": None,
+    "service": {
+        "id": conversation_context.get("service_id"),
+        "name": conversation_context.get("service_name")
+    },
+    "preferences": conversation_context.get(
+        "booking_preferences"
+    ) or {},
+    "candidate_slots": [],
+    "selected_slot": conversation_context.get(
+        "selected_slot"
+    ),
+    "booking_result": None
+},
         # ---------------------------------------------------------
         # AI
         # ---------------------------------------------------------
