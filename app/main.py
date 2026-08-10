@@ -582,46 +582,23 @@ if updated_context:
             persisted_context
     )
 
-    # --------------------------------------------------
-    # 20. RISULTATO
-    # --------------------------------------------------
+# --------------------------------------------------
+# 20. SALVA + INVIA RISPOSTA ASSISTANT
+# --------------------------------------------------
 
-    return {
-        "status": "success",
+whatsapp_response = None
 
-        "message": message,
+if assistant_message and should_send:
 
-        "customer": customer,
+    save_message(
+        conversation["conversation_id"],
+        "assistant",
+        assistant_message
+    )
 
-        "conversation": conversation,
-
-        "conversation_context": (
-            conversation_context
-        ),
-
-        "conversation_message": (
-            conversation_message
-        ),
-
-        "history": history,
-
-        "transitions": transitions,
-
-        "context": context,
-
-        "intent_result": intent_result,
-
-        "services": services,
-
-        "service": service,
-
-        "n8n_response": n8n_response,
-
-        "assistant_message": (
-            assistant_message
-        ),
-
-        "whatsapp_response": (
-            whatsapp_response
+    whatsapp_response = (
+        send_whatsapp_message(
+            to=message["from"],
+            message=assistant_message
         )
-    }
+    )
