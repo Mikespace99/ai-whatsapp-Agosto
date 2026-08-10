@@ -162,15 +162,20 @@ def update_conversation_context(
     context: dict
 ):
     """
-    Persiste il conversation context restituito dal workflow.
+    Persiste il conversation context restituito dal workflow N8N.
 
-    Python e N8N condividono lo stesso Context:
-    - Python costruisce il Context iniziale
-    - N8N modifica solo ciò che gli compete
-    - Python persiste il Context aggiornato
+    Il Context completo viaggia tra Python e N8N.
+    Python persiste esclusivamente:
+        context["conversation"]["context"]
     """
 
     if not context:
+        return None
+
+    conversation = context.get("conversation", {})
+    conversation_context = conversation.get("context", {})
+
+    if not conversation_context:
         return None
 
     allowed_fields = {
@@ -189,9 +194,9 @@ def update_conversation_context(
     }
 
     update_data = {
-        key: context[key]
+        key: conversation_context[key]
         for key in allowed_fields
-        if key in context
+        if key in conversation_context
     }
 
     if not update_data:
