@@ -548,17 +548,29 @@ def process_message(
     # 18. INVIA CONTEXT A N8N
     # --------------------------------------------------
 
-    n8n_response = send_context(
-        context
-    )
+   n8n_response = send_context(context)
 
-    assistant_message = (
-        n8n_response.get("message")
-        if n8n_response
-        else None
-    )
+   if not n8n_response:
+    return {
+        "status": "error",
+        "error": "N8N non ha restituito una risposta"
+    }
 
+   updated_context = n8n_response.get("context")
 
+   response = n8n_response.get(
+    "response",
+    {}
+   )
+
+   assistant_message = response.get(
+    "message"
+   )
+
+   should_send = response.get(
+    "send",
+    True
+   )
     # --------------------------------------------------
     # 19. SALVA + INVIA RISPOSTA ASSISTANT
     # --------------------------------------------------
