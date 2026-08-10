@@ -57,6 +57,7 @@ app = FastAPI(
 
 @app.get("/health")
 def health():
+
     return {
         "status": "ok"
     }
@@ -485,27 +486,31 @@ def process_message(
     # 15. AGGIORNA CONVERSATION CONTEXT
     # --------------------------------------------------
 
+    context_update = {
+
+        "service_id": (
+            service["id"]
+            if service
+            else conversation_context.get(
+                "service_id"
+            )
+        ),
+
+        "service_name": (
+            service["name"]
+            if service
+            else conversation_context.get(
+                "service_name"
+            )
+        ),
+
+        "last_intent": intent
+    }
+
     updated_conversation_context = (
         update_conversation_context(
             conversation["conversation_id"],
-
-            service_id=(
-                service["id"]
-                if service
-                else conversation_context.get(
-                    "service_id"
-                )
-            ),
-
-            service_name=(
-                service["name"]
-                if service
-                else conversation_context.get(
-                    "service_name"
-                )
-            ),
-
-            last_intent=intent
+            context_update
         )
     )
 
@@ -525,44 +530,64 @@ def process_message(
     )
 
 
-# --------------------------------------------------
-# 18. INVIA CONTEXT A N8N
-# --------------------------------------------------
+    # --------------------------------------------------
+    # 17. COSTRUISCI CONTEXT UFFICIALE
+    # --------------------------------------------------
 
-n8n_response = send_context(
-    context
-)
+    context = build_context(
+        tenant=tenant,
+        customer=customer,
+        message=message,
+        conversation=conversation,
+        conversation_context=conversation_context,
+        history=history,
+        transitions=transitions,
+        services=services,
+        whatsapp_account=whatsapp_account
+    )
 
-if not n8n_response:
+    context["ai"] = intent_result
 
-    return {
-        "status": "error",
-        "error": "N8N non ha restituito una risposta"
-    }
 
-updated_context = n8n_response.get(
-    "context"
-)
+    # --------------------------------------------------
+    # 18. INVIA CONTEXT A N8N
+    # --------------------------------------------------
 
-response = n8n_response.get(
-    "response",
-    {}
-)
+    n8n_response = send_context(
+        context
+    )
 
-assistant_message = response.get(
-    "message"
-)
+    if not n8n_response:
 
-should_send = response.get(
-    "send",
-    True
-)
- 
-# --------------------------------------------------
-# 19. PERSISTE CONTEXT AGGIORNATO
-# --------------------------------------------------
+        return {
+            "status": "error",
+            "error": (
+                "N8N non ha restituito una risposta"
+            )
+        }
 
-if updated_context:
+
+    # N8N deve restituire SEMPRE
+    # il Context completo aggiornato.
+
+    updated_context = n8n_response.get(
+        "context"
+    )
+
+    if not updated_context:
+
+        return {
+            "status": "error",
+            "error": (
+                "N8N non ha restituito il Context aggiornato"
+            ),
+            "n8n_response": n8n_response
+        }
+
+
+    # --------------------------------------------------
+    # 19. PERSISTE CONTEXT AGGIORNATO
+    # --------------------------------------------------
 
     returned_conversation_context = (
         updated_context
@@ -578,27 +603,104 @@ if updated_context:
     )
 
     if persisted_context:
+
         conversation_context = (
             persisted_context
-    )
-
-# --------------------------------------------------
-# 20. SALVA + INVIA RISPOSTA ASSISTANT
-# --------------------------------------------------
-
-whatsapp_response = None
-
-if assistant_message and should_send:
-
-    save_message(
-        conversation["conversation_id"],
-        "assistant",
-        assistant_message
-    )
-
-    whatsapp_response = (
-        send_whatsapp_message(
-            to=message["from"],
-            message=assistant_message
         )
+
+
+    # Il Context ufficiale ora è quello
+    # restituito da N8N.
+
+    context = updated_context
+
+
+    # --------------------------------------------------
+    # 20. RISPOSTA N8N
+    # --------------------------------------------------
+
+    response = n8n_response.get(
+        "response",
+        {}
     )
+
+    assistant_message = response.get(
+        "message"
+    )
+
+    should_send = response.get(
+        "send",
+        True
+    )
+
+
+    # --------------------------------------------------
+    # 21. SALVA + INVIA RISPOSTA ASSISTANT
+    # --------------------------------------------------
+
+    whatsapp_response = None
+
+    if assistant_message and should_send:
+
+        # Salva risposta nel database
+
+        save_message(
+            conversation["conversation_id"],
+            "assistant",
+            assistant_message
+        )
+
+        # Invia risposta a WhatsApp
+
+        whatsapp_response = (
+            send_whatsapp_message(
+                to=message["from"],
+                message=assistant_message
+            )
+        )
+
+
+    # --------------------------------------------------
+    # 22. RISULTATO
+    # --------------------------------------------------
+
+    return {
+
+        "status": "success",
+
+        "message": message,
+
+        "customer": customer,
+
+        "conversation": conversation,
+
+        "conversation_context": (
+            conversation_context
+        ),
+
+        "conversation_message": (
+            conversation_message
+        ),
+
+        "history": history,
+
+        "transitions": transitions,
+
+        "context": context,
+
+        "intent_result": intent_result,
+
+        "services": services,
+
+        "service": service,
+
+        "n8n_response": n8n_response,
+
+        "assistant_message": (
+            assistant_message
+        ),
+
+        "whatsapp_response": (
+            whatsapp_response
+        )
+    }
