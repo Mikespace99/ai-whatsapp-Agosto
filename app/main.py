@@ -628,9 +628,9 @@ def process_message(
         "message"
     )
 
-    should_send = response.get(
-        "send",
-        True
+   should_send = n8n_response.get(
+    "send",
+    True
     )
 
 
