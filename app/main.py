@@ -557,10 +557,16 @@ context["ai"] = intent_result
 # 19. PERSISTE CONTEXT AGGIORNATO
 # --------------------------------------------------
 
+returned_conversation_context = (
+    updated_context
+    .get("conversation", {})
+    .get("context", {})
+)
+
 persisted_context = (
     update_conversation_context(
         conversation["conversation_id"],
-        updated_context
+        returned_conversation_context
     )
 )
 
@@ -570,12 +576,10 @@ if persisted_context:
         persisted_context
     )
 
-
 # Il Context ufficiale ora è quello
 # restituito da N8N.
 
 context = updated_context
-
 
 # --------------------------------------------------
 # 20. RISPOSTA N8N
