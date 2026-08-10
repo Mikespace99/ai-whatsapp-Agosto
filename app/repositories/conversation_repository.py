@@ -161,6 +161,18 @@ def update_conversation_context(
     conversation_id: str,
     context: dict
 ):
+    """
+    Persiste il conversation context restituito dal workflow.
+
+    Python e N8N condividono lo stesso Context:
+    - Python costruisce il Context iniziale
+    - N8N modifica solo ciò che gli compete
+    - Python persiste il Context aggiornato
+    """
+
+    if not context:
+        return None
+
     allowed_fields = {
         "service_id",
         "service_name",
@@ -176,25 +188,24 @@ def update_conversation_context(
         "ai_summary"
     }
 
-    data = {
-        key: value
-        for key, value in context.items()
-        if key in allowed_fields
+    update_data = {
+        key: context[key]
+        for key in allowed_fields
+        if key in context
     }
 
-    if not data:
+    if not update_data:
         return None
 
     response = (
         supabase
         .table("conversation_context")
-        .update(data)
+        .update(update_data)
         .eq("conversation_id", conversation_id)
         .execute()
     )
 
     return response.data[0] if response.data else None
-
 
 def update_conversation_state(
     conversation_id: str,
